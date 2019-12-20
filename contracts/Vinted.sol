@@ -1,14 +1,14 @@
-pragma solidity ^0.4.18;
+pragma solidity >=0.4.21 <0.7.0;
 
 contract Vinted {
-    address public serviceProvider;
+    address payable serviceProvider;
 
     constructor() public payable {
         serviceProvider = msg.sender;
     }
     
     struct Order {
-        address buyer;
+        address payable buyer;
         Seller seller;
         Shipment shipment;
         uint date;
@@ -20,13 +20,13 @@ contract Vinted {
     }
     
     struct Seller {
-        address addr;
+        address payable addr;
         uint price;
         uint safepay;
     }
     
     struct Shipment {
-        address addr;
+        address payable addr;
         uint price;
         uint safepay;
     }
@@ -50,9 +50,9 @@ contract Vinted {
     event OrderDelivered(address buyer, address courier, uint invoiceno, uint orderno, uint timestamp);
     event SafepaySent(uint orderno, uint spSafepay, uint sellerSafepay, uint courierSafepay);
     
-    function sendOrder(address sellerAddr, string product) payable public {
+    function sendOrder(address payable sellerAddr, string memory product) payable public {
         orderseq++;
-        address buyerAddr = msg.sender;
+        address payable buyerAddr = msg.sender;
         orders[orderseq] = Order(buyerAddr, Seller(sellerAddr, 0, 0), Shipment(address(0), 0, 0), now, 0, product, 0, true);
         
         emit OrderSent(orderseq, buyerAddr, sellerAddr, now, 0, product, false, true);
@@ -83,7 +83,7 @@ contract Vinted {
         emit SafepaySent(orderno, orders[orderno].safepay, orders[orderno].seller.safepay, orders[orderno].shipment.safepay);
     }
     
-    function sendInvoice(uint orderno, uint deliveryDate, address courier) payable public {
+    function sendInvoice(uint orderno, uint deliveryDate, address payable courier) payable public {
         require(orders[orderno].init);
         require(msg.sender == serviceProvider);
         
@@ -95,7 +95,7 @@ contract Vinted {
         emit InvoiceSent(courier, orders[orderno].buyer, orderno, invoiceseq, deliveryDate);
     }
     
-    function delivery(uint invoiceno) payable public {
+    function delivery(uint invoiceno) external payable {
         require(invoices[invoiceno].init);
     
         Invoice storage _invoice = invoices[invoiceno];
@@ -104,8 +104,8 @@ contract Vinted {
     
         emit OrderDelivered(_order.buyer, _order.shipment.addr, invoiceno, _invoice.orderno, now);
 
-        address courier = _order.shipment.addr;
-        address seller = _order.seller.addr;
+        address payable courier = _order.shipment.addr;
+        address payable seller = _order.seller.addr;
         
         serviceProvider.transfer(_order.safepay);
         courier.transfer(_order.shipment.safepay);
