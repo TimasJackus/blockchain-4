@@ -1,56 +1,105 @@
-import React, { Component, useState } from 'react'
+import React, { Component, useState, createContext } from 'react'
 import Web3 from 'web3'
 import './App.css'
+import 'rsuite/dist/styles/rsuite-default.css';
 import { VINTED_LIST_ABI, VINTED_CONTRACT_ADDRESS } from './config/config';
+import { ListView } from './containers/ListView';
+import { Switch, Route, Router, BrowserRouter, useHistory, Redirect } from 'react-router-dom';
+import { ProductListView } from './containers/ProductListView';
+import { OrderListView } from './containers/OrderListView';
+import { Header } from './components/Header';
+import { useLocalStorage } from '@rehooks/local-storage';
+import { InvoicesListView } from './containers/InvoicesListView';
 
-export const App = () => {
+const roles = [
+  { id: 0, name: 'SERVICE_PROVIDER' },
+  { id: 1, name: 'SELLER' },
+  { id: 2, name: 'COURIER' },
+  { id: 3, name: 'BUYER' }
+];
+
+const getRoleNameById = (id) => {
+  if (id === 0) {
+    return roles[0].name;
+  }
+
+  const index = (id % 3) + 1;
+  return roles[index].name;
+};
+
+const BlockchainContext = createContext({
+  web3: null,
+  contract: null,
+  accounts: []
+});
+
+const BlockchainConsumer = (Component) => (
+  <BlockchainContext.Consumer>
+    {value => <Component {...value} />}
+  </BlockchainContext.Consumer>
+);
+
+const App = () => {
   const [accounts, setAccounts] = useState(null);
+  const [account] = useLocalStorage('selected-account');
   const web3 = new Web3("ws://localhost:8545");
   const Contract = new web3.eth.Contract(VINTED_LIST_ABI, VINTED_CONTRACT_ADDRESS);
-  const loadBlockhainData = async () => {
-    if (!accounts) {
-      let accounts = await web3.eth.getAccounts();
-      accounts = await Promise.all(accounts.map(async (address, id) => {
-          let balance = await web3.eth.getBalance(address);
-          balance = balance / Math.pow(10, 18);
-          return { id, address, balance };
-      }));
-      setAccounts(accounts);
+  const ListViewConstant = BlockchainConsumer(ListView);
+
+  const loadBlockchainData = async () => {
+    let accounts = await web3.eth.getAccounts();
+    accounts = await Promise.all(accounts.map(async (address, id) => {
+        let balance = await web3.eth.getBalance(address);
+        balance = (balance / Math.pow(10, 18)).toFixed(4);
+        const role = getRoleNameById(id);
+        return { id, address, balance, role };
+    }));
+    setAccounts(accounts);
+  };
+
+  if (!accounts) {
+    loadBlockchainData();
+  }
+
+  const AuthRoute = ({ path, component }) => {
+    if (!account) {
+      return null;
     }
+    if (path === '/products' && account.role !== 'BUYER') {
+      return null;
+    }
+    if (path === '/orders' && account.role !== 'SELLER') {
+      return null;
+    }
+    if (path === '/invoices' && account.role !== 'COURIER') {
+      return null;
+    }
+    return <Route path={path}>{BlockchainConsumer(component)}</Route>;
   };
   
-  if (Contract) {
-    Contract.events.OrderSent({ fromBlock: 0 }, function(error, event){ console.log(error, event); })
-      .once('data', function(event){
-          console.log('d:', event); // same results as the optional callback above
-      })
-      .once('changed', function(event){
-        console.log('c:', event)
-          // remove event from local database
-      })
-      .once('error', console.error);
-  }
 
-  if (accounts) {
-    console.log({ Contract });
-    const test = async () => {
-      // const test = await Contract.methods.serviceProvider().call();
-      // console.log({ test });
-      const orderRes = await Contract.methods.sendOrder(accounts[1].address, "ass").send({ from: accounts[0].address });
-      console.log(orderRes);
-      // const response = await Contract.methods.sendPrice(1, 100, 100, 100).send({ from: accounts[1].address });
-      // console.log(response);
-    };
-    test();
-  }
-
-  loadBlockhainData();
+  const BlockchainContextValue = {
+    web3: web3,
+    contract: Contract,
+    accounts: accounts,
+    loadBlockchainData
+  };
 
   return (
-    <div className="container">
-      <h1>Hello, World!</h1>
-      <p>Your account: {accounts ? accounts[4].address : null}<br />{accounts ? accounts[4].balance : null} ETH</p>
-    </div>
+    <BlockchainContext.Provider value={BlockchainContextValue}>
+      <BrowserRouter>
+        <Header />
+        <Switch>
+          <Route exact path="/">
+            {ListViewConstant}
+          </Route>
+          {AuthRoute({ path: '/products', component: ProductListView })}
+          {AuthRoute({ path: '/orders', component: OrderListView })}
+          {AuthRoute({ path: '/invoices', component: InvoicesListView })}
+          <Redirect to="/" /> 
+        </Switch>
+      </BrowserRouter>
+    </BlockchainContext.Provider>
   );
 }
 

@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "@rehooks/local-storage": "^2.1.1",
+    "add": "^2.0.6",
+    "react-router-dom": "^5.1.2",
+    "rsuite": "^4.2.0",
+    "store": "^2.0.12",
+    "yarn": "^1.21.1"
+  }
+}

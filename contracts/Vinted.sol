@@ -34,6 +34,7 @@ contract Vinted {
     struct Invoice {
         uint orderno;
         uint deliveryDate;
+        bool delivered;
         
         bool init;
     }
@@ -49,6 +50,22 @@ contract Vinted {
     event InvoiceSent(address courier, address buyer, uint orderno, uint invoiceno, uint deliveryDate);
     event OrderDelivered(address buyer, address courier, uint invoiceno, uint orderno, uint timestamp);
     event SafepaySent(uint orderno, uint spSafepay, uint sellerSafepay, uint courierSafepay);
+    
+    function getOrdersCount() public view returns(uint) {
+        return orderseq;
+    }
+    
+    function getOrder(uint index) public view returns(uint, address, address, address, uint, string memory) {
+        return (index, orders[index].buyer, orders[index].seller.addr, orders[index].shipment.addr, orders[index].date, orders[index].product);
+    }
+    
+    function getInvoicesCount() public view returns(uint) {
+        return invoiceseq;
+    }
+    
+    function getInvoice(uint index) public view returns(uint, uint, address, bool) {
+        return (index, invoices[index].orderno, orders[invoices[index].orderno].shipment.addr, invoices[index].delivered);
+    }
     
     function sendOrder(address payable sellerAddr, string memory product) payable public {
         orderseq++;
@@ -77,19 +94,20 @@ contract Vinted {
     
         require(1 finney * (_order.spPrice + _order.seller.price + _order.shipment.price) <= msg.value);
     
-        orders[orderno].safepay = _order.spPrice * 1 finney;
-        orders[orderno].seller.safepay = _order.seller.price * 1 finney;
-        orders[orderno].shipment.safepay = _order.shipment.price * 1 finney;
+        orders[orderno].safepay = _order.spPrice * 1 ether;
+        orders[orderno].seller.safepay = _order.seller.price * 1 ether;
+        orders[orderno].shipment.safepay = _order.shipment.price * 1 ether;
         emit SafepaySent(orderno, orders[orderno].safepay, orders[orderno].seller.safepay, orders[orderno].shipment.safepay);
     }
     
     function sendInvoice(uint orderno, uint deliveryDate, address payable courier) payable public {
         require(orders[orderno].init);
-        require(msg.sender == serviceProvider);
+        address payable seller = orders[orderno].seller.addr;
+        require(msg.sender == seller);
         
         invoiceseq++;
         
-        invoices[invoiceseq] = Invoice(orderno, deliveryDate, true);
+        invoices[invoiceseq] = Invoice(orderno, deliveryDate, false, true);
         orders[orderno].shipment.addr = courier;
         
         emit InvoiceSent(courier, orders[orderno].buyer, orderno, invoiceseq, deliveryDate);
@@ -99,6 +117,7 @@ contract Vinted {
         require(invoices[invoiceno].init);
     
         Invoice storage _invoice = invoices[invoiceno];
+        _invoice.delivered = true;
         Order storage _order     = orders[_invoice.orderno];
         require(msg.sender == _order.shipment.addr);
     
